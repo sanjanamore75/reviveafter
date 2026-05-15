@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "683266467920",
+    "project_id": "zegochat-c44b0",
+    "storage_bucket": "zegochat-c44b0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:683266467920:android:8058fbf0a90f092b860955",
+        "android_client_info": {
+          "package_name": "com.example.chating"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "683266467920-7vu3q65r44c7gd43fn7asbga1qnclngt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.chating",
+            "certificate_hash": "72f77af15fe4e02d7f2aaa5f75fabf81cef642ca"
+          }
+        },
+        {
+          "client_id": "683266467920-8s7ig7fhbie60658urttu6idunout3jv.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD_Gm-h-5CPldqwsDvlOPjXyqWFzYk4hmc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "683266467920-8s7ig7fhbie60658urttu6idunout3jv.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
