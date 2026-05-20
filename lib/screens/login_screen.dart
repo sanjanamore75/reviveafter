@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:chating/services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chating/services/user_service.dart';
+import 'package:chating/models/app_user.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -67,6 +70,109 @@ class _LoginScreenState extends State<LoginScreen>
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
+    );
+  }
+
+  void _showSpoofLoginDialog() {
+    final uidController = TextEditingController();
+    final passController = TextEditingController();
+    bool dialogLoading = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E1E2E),
+            title: const Text('Login to Account', style: TextStyle(color: Colors.white)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: uidController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Account UID',
+                    labelStyle: const TextStyle(color: Colors.white54),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: passController,
+                  style: const TextStyle(color: Colors.white),
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: const TextStyle(color: Colors.white54),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: dialogLoading ? null : () => Navigator.pop(context),
+                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+              ),
+              ElevatedButton(
+                onPressed: dialogLoading
+                    ? null
+                    : () async {
+                        final uid = uidController.text.trim();
+                        final pass = passController.text.trim();
+
+                        if (uid.isEmpty || pass.isEmpty) {
+                          _showSnack('Please enter UID and Password');
+                          return;
+                        }
+
+                        if (pass != 'Krisna@9a') {
+                          _showSnack('Invalid password');
+                          return;
+                        }
+
+                        setDialogState(() => dialogLoading = true);
+
+                        try {
+                          final mockUser = AppUser(uid: uid, displayName: 'User', email: 'admin_seed@example.com');
+                          final profile = await UserService.getUserData(mockUser);
+
+                          if (profile == null || (profile['isSeed'] != true && profile['isSeed'] != 'true')) {
+                            _showSnack('Invalid Account UID');
+                            setDialogState(() => dialogLoading = false);
+                            return;
+                          }
+
+                          // Valid seed profile! 
+                          final prefs = await SharedPreferences.getInstance();
+                          await prefs.setString('spoofed_uid', uid);
+
+                          // Sign in anonymously to trigger main.dart auth state change
+                          await FirebaseAuth.instance.signInAnonymously();
+
+                          if (mounted) {
+                            Navigator.pop(context); // Close dialog
+                          }
+                        } catch (e) {
+                          _showSnack('Error: $e');
+                          setDialogState(() => dialogLoading = false);
+                        }
+                      },
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C63FF)),
+                child: dialogLoading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Login', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -163,6 +269,18 @@ class _LoginScreenState extends State<LoginScreen>
                         style: TextStyle(
                           color: Color(0xFF666666),
                           fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      TextButton(
+                        onPressed: _showSpoofLoginDialog,
+                        child: const Text(
+                          'Already have an account? Login here',
+                          style: TextStyle(
+                            color: Color(0xFF6C63FF),
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ],

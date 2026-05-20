@@ -1,16 +1,17 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:chating/models/app_user.dart';
 
 class UserService {
   static final _db = FirebaseDatabase.instance;
 
   /// Returns the DatabaseReference for [user].
-  static DatabaseReference getUserRef(User user) =>
+  static DatabaseReference getUserRef(AppUser user) =>
       _db.ref('users/${user.uid}');
 
   /// Saves the user's profile to Firebase.
   static Future<void> saveProfile({
-    required User user,
+    required AppUser user,
     required String gender,
     String? name,
     String? lookingFor,
@@ -45,7 +46,7 @@ class UserService {
   }
 
   /// Returns a stream of the current user's profile data.
-  static Stream<Map<String, dynamic>?> userStream(User user) {
+  static Stream<Map<String, dynamic>?> userStream(AppUser user) {
     return getUserRef(user).onValue.map((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data == null) return null;
@@ -54,7 +55,7 @@ class UserService {
   }
 
   /// Adds [amount] to the user's coin balance.
-  static Future<void> addCoins(User user, int amount) async {
+  static Future<void> addCoins(AppUser user, int amount) async {
     final ref = getUserRef(user);
     final snap = await ref.child('coins').get();
     int current = 0;
@@ -65,7 +66,7 @@ class UserService {
   }
 
   /// Returns the full user data.
-  static Future<Map<String, dynamic>?> getUserData(User user) async {
+  static Future<Map<String, dynamic>?> getUserData(AppUser user) async {
     try {
       final snap = await getUserRef(user).get().timeout(const Duration(seconds: 5));
       if (!snap.exists || snap.value == null) return null;
@@ -82,7 +83,7 @@ class UserService {
   }
 
   /// Returns the saved gender for [user], or null if not set yet.
-  static Future<String?> getGender(User user) async {
+  static Future<String?> getGender(AppUser user) async {
     final snap = await getUserRef(user).get();
     if (!snap.exists) return null;
     final data = snap.value as Map<dynamic, dynamic>?;
@@ -94,6 +95,7 @@ class UserService {
   static Stream<List<Map<String, dynamic>>> profilesByPreference({
     required String lookingFor,
     required String excludeUID,
+    bool onlyRealUsers = false,
   }) {
     return _db.ref('users').onValue.map((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
@@ -105,12 +107,17 @@ class UserService {
         // 1. Exclude self
         if (user['uid'] == excludeUID) return false;
 
-        // 2. Must have a photo
+        // 2. Filter seed profiles if requested
+        if (onlyRealUsers && (user['isSeed'] == true || user['isSeed'] == 'true')) {
+          return false;
+        }
+
+        // 3. Must have a photo
         if (user['photoURL'] == null || user['photoURL'].toString().isEmpty) {
           return false;
         }
 
-        // 3. Match gender preference
+        // 4. Match gender preference
         final gender = user['gender'] as String?;
         if (lookingFor == 'both') {
           return gender == 'male' || gender == 'female';
@@ -129,7 +136,7 @@ class UserService {
     final data = snap.value as Map<dynamic, dynamic>?;
     if (data == null) return [];
 
-    final adminEmails = ['analystcodehub@gmail.com', 'chatzego@gmail.com'];
+    final adminEmails = ['analystcodehub@gmail.com'];
     final List<String> adminUids = [];
 
     for (var entry in data.values) {

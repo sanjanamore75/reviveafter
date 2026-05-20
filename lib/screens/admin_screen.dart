@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:chating/services/auth_service.dart';
 import 'package:chating/services/user_service.dart';
+import 'package:chating/models/app_user.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:chating/services/zego_service.dart';
@@ -56,7 +57,10 @@ class _AdminScreenState extends State<AdminScreen> {
         userName: 'Admin',
       );
       if (mounted) {
-        await UserService.saveProfile(user: user, gender: 'admin');
+        await UserService.saveProfile(
+          user: AppUser.fromFirebaseUser(user), 
+          gender: 'admin',
+        );
         _showSnack('Admin Zego online (UID: ${user.uid})', isError: false);
       }
     }
@@ -159,6 +163,65 @@ class _AdminScreenState extends State<AdminScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx),
             child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+          )
+        ],
+      )
+    );
+  }
+
+  void _showProfileHistory(Map<String, dynamic> seedProfile) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E2E),
+        title: Text('History for ${seedProfile['name']}', style: const TextStyle(color: Colors.white, fontSize: 18)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: UserService.getUnifiedHistory(seedProfile['uid']),
+            builder: (ctx, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)));
+              }
+              final items = snapshot.data ?? [];
+              if (items.isEmpty) return const Text('No history found', style: TextStyle(color: Colors.white54));
+              
+              return ListView.builder(
+                shrinkWrap: true,
+                itemCount: items.length,
+                itemBuilder: (ctx, i) {
+                  final item = items[i];
+                  final isCall = item.containsKey('callerId');
+                  final title = isCall ? (item['callerName'] ?? 'Unknown Caller') : (item['name'] ?? 'User');
+                  final timeMillis = item['lastActivity'] ?? item['timestamp'];
+                  final timeStr = timeMillis != null ? DateTime.fromMillisecondsSinceEpoch(timeMillis as int).toString().split('.')[0] : '';
+                  final subtitle = isCall 
+                      ? '${item['status'] == 'missed' ? 'Missed Call' : 'Call'} • $timeStr'
+                      : '${item['lastMessage'] ?? 'No messages'} • $timeStr';
+                      
+                  return ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFF6C63FF).withOpacity(0.3),
+                      backgroundImage: NetworkImage(isCall ? (item['callerPhoto'] ?? '') : (item['photoURL'] ?? '')),
+                    ),
+                    title: Text(title, style: const TextStyle(color: Colors.white)),
+                    subtitle: Text(subtitle, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                    trailing: isCall 
+                        ? Icon(
+                            item['isVideo'] == true ? Icons.videocam : Icons.call,
+                            color: item['status'] == 'missed' ? Colors.redAccent : Colors.greenAccent,
+                          )
+                        : const Icon(Icons.chat_bubble_rounded, color: Color(0xFF6C63FF)),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close', style: TextStyle(color: Colors.white54)),
           )
         ],
       )
@@ -446,28 +509,63 @@ class _AdminScreenState extends State<AdminScreen> {
                           itemBuilder: (context, index) {
                             final p = profiles[index];
                             final isFemale = p['gender'] == 'female';
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: isFemale ? const Color(0xFFE91E8C).withOpacity(0.3) : const Color(0xFF4F8EF7).withOpacity(0.3),
-                                backgroundImage: NetworkImage(p['photoURL'] ?? ''),
-                              ),
-                              title: Text(p['name'] ?? '', style: const TextStyle(color: Colors.white)),
-                              subtitle: Text(p['uid'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 11)),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.wifi_calling_3_rounded, color: Color(0xFF00C9A7)),
-                                    tooltip: 'Call a user as this profile',
-                                    onPressed: () => _showRealUsersDialog(p),
+                            return StreamBuilder<List<Map<String, dynamic>>>(
+                              stream: UserService.getUnifiedHistory(p['uid']),
+                              builder: (context, historySnap) {
+                                final history = historySnap.data ?? [];
+                                final hasAlerts = history.isNotEmpty;
+                                final alertCount = history.length;
+
+                                return ListTile(
+                                  leading: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      CircleAvatar(
+                                        backgroundColor: isFemale ? const Color(0xFFE91E8C).withOpacity(0.3) : const Color(0xFF4F8EF7).withOpacity(0.3),
+                                        backgroundImage: NetworkImage(p['photoURL'] ?? ''),
+                                      ),
+                                      if (hasAlerts)
+                                        Positioned(
+                                          right: -4,
+                                          top: -4,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.redAccent,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Text(
+                                              alertCount > 9 ? '9+' : alertCount.toString(),
+                                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_rounded, color: Colors.white38),
-                                    tooltip: 'Delete Profile',
-                                    onPressed: () => UserService.deleteProfile(p['uid']),
+                                  title: Text(p['name'] ?? '', style: const TextStyle(color: Colors.white)),
+                                  subtitle: Text(p['uid'] ?? '', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.history_rounded, color: hasAlerts ? Colors.amber : Colors.white38),
+                                        tooltip: 'View History',
+                                        onPressed: () => _showProfileHistory(p),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.wifi_calling_3_rounded, color: Color(0xFF00C9A7)),
+                                        tooltip: 'Call a user as this profile',
+                                        onPressed: () => _showRealUsersDialog(p),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_rounded, color: Colors.white38),
+                                        tooltip: 'Delete Profile',
+                                        onPressed: () => UserService.deleteProfile(p['uid']),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
+                                );
+                              }
                             );
                           },
                         );

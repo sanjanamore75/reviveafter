@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:chating/models/app_user.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:chating/services/auth_service.dart';
 import 'package:chating/services/user_service.dart';
@@ -12,7 +12,7 @@ import 'package:chating/screens/messages_screen.dart';
 import 'package:chating/screens/chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final User user;
+  final AppUser user;
   final String? myGender; // 'male' or 'female'
   final String? lookingFor; // 'male', 'female', or 'both'
   const HomeScreen({super.key, required this.user, this.myGender, this.lookingFor});
@@ -567,6 +567,7 @@ class _HomeScreenState extends State<HomeScreen> {
       stream: UserService.profilesByPreference(
         lookingFor: _preference,
         excludeUID: widget.user.uid,
+        onlyRealUsers: widget.user.isSeed,
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -856,8 +857,8 @@ class _HomeScreenState extends State<HomeScreen> {
       onSelected: (value) {
         setState(() => _currentInterest = value);
         // Optionally save to DB here if you want it to persist across sessions
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
+        final user = widget.user;
+        if (!user.isSeed) {
           UserService.getUserRef(user).update({'lookingFor': value});
         }
       },

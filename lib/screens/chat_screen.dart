@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:chating/models/app_user.dart';
 import 'package:chating/services/zim_service.dart';
 import 'package:chating/services/user_service.dart';
 
 class ChatScreen extends StatefulWidget {
-  final User currentUser;
+  final AppUser currentUser;
   final Map<String, dynamic> targetProfile;
   final Future<void> Function(Map<String, dynamic> profile,
       {required bool isVideoCall}) onCallUser;

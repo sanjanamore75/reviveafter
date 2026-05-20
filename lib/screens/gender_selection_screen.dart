@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:chating/models/app_user.dart';
 import 'package:chating/services/user_service.dart';
 import 'package:chating/screens/profile_setup_screen.dart';
 
 class GenderSelectionScreen extends StatefulWidget {
-  final User user;
+  final AppUser user;
   const GenderSelectionScreen({super.key, required this.user});
 
   @override

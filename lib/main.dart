@@ -12,6 +12,9 @@ import 'package:chating/services/user_service.dart';
 import 'package:chating/services/notification_service.dart';
 import 'package:chating/services/permission_service.dart';
 import 'package:chating/screens/permission_screen.dart';
+import 'package:chating/screens/spoof_login_screen.dart';
+import 'package:chating/models/app_user.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:chating/services/zego_service.dart';
@@ -56,10 +59,13 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   );
 }
 
+late SharedPreferences prefs;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
+    prefs = await SharedPreferences.getInstance();
     print('🚀 Starting Firebase initialization...');
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -95,14 +101,23 @@ Future<void> _initBackgroundServices() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       print('✅ Existing user found: ${user.uid}');
-      final profile = await UserService.getUserData(user)
+      
+      final spoofedUid = prefs.getString('spoofed_uid');
+      AppUser appUser;
+      if (spoofedUid != null && spoofedUid.isNotEmpty) {
+        appUser = AppUser(uid: spoofedUid, displayName: 'User', email: 'admin_seed@example.com', isSeed: true);
+      } else {
+        appUser = AppUser.fromFirebaseUser(user);
+      }
+
+      final profile = await UserService.getUserData(appUser)
           .timeout(const Duration(seconds: 5));
       final displayName = profile?['name'] ?? user.displayName ?? 'User';
       print('👤 Display name: $displayName');
 
       print('🚀 Initializing Zego and Zim...');
-      await ZegoService().init(userID: user.uid, userName: displayName);
-      await ZimService().init(userID: user.uid, userName: displayName);
+      await ZegoService().init(userID: appUser.uid, userName: displayName);
+      await ZimService().init(userID: appUser.uid, userName: displayName);
       print('✅ Zego and Zim initialized');
     } else {
       print('⚠️ No user logged in yet. Waiting for login.');
@@ -141,7 +156,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   /// Returns a cached profile future. Only re-fetches if the user changes.
-  Future<Map<String, dynamic>?> _getProfileFuture(User user) {
+  Future<Map<String, dynamic>?> _getProfileFuture(AppUser user) {
     if (_cachedUserId != user.uid || _profileFuture == null) {
       _cachedUserId = user.uid;
       _profileFuture = UserService.getUserData(user);
@@ -193,9 +208,20 @@ class _MyAppState extends State<MyApp> {
 
           final user = snapshot.data!;
 
-          if (user.email == 'analystcodehub@gmail.com' ||
-              user.email == 'chatzego@gmail.com') {
+          if (user.email == 'analystcodehub@gmail.com') {
             return const AdminScreen();
+          }
+
+          if (user.email == 'chatzego@gmail.com') {
+            return const SpoofLoginScreen();
+          }
+
+          final spoofedUid = prefs.getString('spoofed_uid');
+          AppUser appUser;
+          if (spoofedUid != null && spoofedUid.isNotEmpty) {
+            appUser = AppUser(uid: spoofedUid, displayName: 'User', email: 'admin_seed@example.com', isSeed: true);
+          } else {
+            appUser = AppUser.fromFirebaseUser(user);
           }
 
           return FutureBuilder<bool>(
@@ -217,7 +243,7 @@ class _MyAppState extends State<MyApp> {
 
               return FutureBuilder<Map<String, dynamic>?>(
                 // ✅ Use cached future — prevents grey screen on app reopen
-                future: _getProfileFuture(user),
+                future: _getProfileFuture(appUser),
                 builder: (context, profileSnap) {
                   if (profileSnap.hasError) {
                     return ErrorScreen(
@@ -243,15 +269,15 @@ class _MyAppState extends State<MyApp> {
                   final lookingFor = profile?['lookingFor'] as String?;
 
                   if (gender == null || gender.isEmpty) {
-                    return GenderSelectionScreen(user: user);
+                    return GenderSelectionScreen(user: appUser);
                   }
 
                   if (phone == null || phone.isEmpty) {
-                    return ProfileSetupScreen(user: user, initialGender: gender);
+                    return ProfileSetupScreen(user: appUser, initialGender: gender);
                   }
 
                   return HomeScreen(
-                    user: user,
+                    user: appUser,
                     myGender: gender,
                     lookingFor: lookingFor,
                   );

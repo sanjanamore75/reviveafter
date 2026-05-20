@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:chating/models/app_user.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
@@ -8,7 +9,7 @@ import 'package:chating/services/user_service.dart';
 import 'package:chating/screens/home_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
-  final User user;
+  final AppUser user;
   final String initialGender;
 
   const ProfileSetupScreen({
@@ -138,7 +139,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
       // If we have a photo, update the photoURL separately or in saveProfile
       if (photoURL != null) {
-        await widget.user.updatePhotoURL(photoURL);
+        await FirebaseAuth.instance.currentUser?.updatePhotoURL(photoURL);
         // Also update in DB
         final ref = UserService.getUserRef(widget.user);
         await ref.update({'photoURL': photoURL});

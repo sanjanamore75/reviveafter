@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:chating/models/app_user.dart';
 import 'package:chating/services/user_service.dart';
 import 'package:chating/screens/chat_screen.dart';
 
 class MessagesScreen extends StatelessWidget {
-  final User currentUser;
+  final AppUser currentUser;
   final Future<void> Function(Map<String, dynamic> profile,
       {required bool isVideoCall}) onCallUser;
 
@@ -109,7 +109,7 @@ class MessagesScreen extends StatelessWidget {
 // ─── Single Conversation Row ─────────────────────────────────────────────────
 class _ConversationTile extends StatelessWidget {
   final Map<String, dynamic> conv;
-  final User currentUser;
+  final AppUser currentUser;
   final Future<void> Function(Map<String, dynamic>,
       {required bool isVideoCall}) onCallUser;
 

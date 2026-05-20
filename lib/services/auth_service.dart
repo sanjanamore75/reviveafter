@@ -62,6 +62,9 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('spoofed_uid');
+    
     ZegoService().uninit();
     await _googleSignIn.signOut();
     await _auth.signOut();
