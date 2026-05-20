@@ -3,6 +3,7 @@ import 'package:chating/services/auth_service.dart';
 import 'package:chating/services/user_service.dart';
 import 'package:chating/models/app_user.dart';
 import 'package:chating/screens/home_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SpoofLoginScreen extends StatefulWidget {
   const SpoofLoginScreen({super.key});
@@ -39,6 +40,10 @@ class _SpoofLoginScreenState extends State<SpoofLoginScreen> {
       }
 
       final appUser = AppUser.fromSeedProfile(profile);
+
+      // Save to SharedPreferences so background processes know who we are spoofing
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('spoofed_uid', uid);
 
       if (mounted) {
         Navigator.pushReplacement(

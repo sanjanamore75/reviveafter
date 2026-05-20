@@ -29,33 +29,26 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   print('📩 BG FCM message: ${message.data}');
 
-  // Detect if this is a call invitation
   final data = message.data;
 
-  // Zego/ZIM often put the sender name in different fields depending on the plugin
-  String? senderName =
-      data['caller_name'] ?? data['sender_name'] ?? data['title'];
+  // 🚨 CRITICAL: Let Zego handle its own call notifications!
+  // If we show a local notification here, it will conflict with Zego's native 
+  // WhatsApp-like full-screen call intent and cause duplicate notifications.
+  if (data.containsKey('zego') || data.containsKey('call_id')) {
+    print('📞 Zego Call detected in background. Letting ZPNs handle it natively.');
+    return;
+  }
 
-  bool isCall = data.containsKey('call_id') ||
-      data.containsKey('zego') ||
-      (message.notification?.title?.toLowerCase().contains('call') ?? false) ||
-      (data['title']?.toLowerCase().contains('call') ?? false);
+  String? senderName = data['sender_name'] ?? data['title'];
+  String title = message.notification?.title ?? senderName ?? 'New Message';
+  String body = message.notification?.body ?? data['content'] ?? data['body'] ?? '';
 
-  String title = message.notification?.title ??
-      senderName ??
-      (isCall ? 'Incoming Call' : 'New Message');
-
-  String body = message.notification?.body ??
-      data['content'] ??
-      data['body'] ??
-      (isCall ? 'Tap to answer' : '');
-
-  // Show local notification with buttons if it's a call
+  // Show local notification for CHAT MESSAGES only
   await NotificationService().showNotification(
     title: title,
     body: body,
     payload: data.toString(),
-    isCall: isCall,
+    isCall: false,
   );
 }
 
@@ -212,9 +205,7 @@ class _MyAppState extends State<MyApp> {
             return const AdminScreen();
           }
 
-          if (user.email == 'chatzego@gmail.com') {
-            return const SpoofLoginScreen();
-          }
+
 
           final spoofedUid = prefs.getString('spoofed_uid');
           AppUser appUser;

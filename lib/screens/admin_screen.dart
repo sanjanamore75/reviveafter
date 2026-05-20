@@ -9,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:chating/services/zego_service.dart';
 import 'package:chating/services/permission_service.dart';
+import 'package:chating/screens/spoof_login_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -367,6 +368,16 @@ class _AdminScreenState extends State<AdminScreen> {
               label: const Text('Restore Admin', style: TextStyle(color: Color(0xFFFFB74D), fontSize: 12)),
             ),
           const SizedBox(width: 8),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SpoofLoginScreen()),
+              );
+            },
+            icon: const Icon(Icons.people_alt_rounded, color: Color(0xFF6C63FF)),
+            tooltip: 'Spoof Login',
+          ),
           IconButton(
             onPressed: _signOut,
             icon: const Icon(Icons.logout_rounded, color: Color(0xFFFF6B6B)),

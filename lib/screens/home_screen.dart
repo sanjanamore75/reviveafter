@@ -78,12 +78,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
 
-  Future<void> _callUser(Map<String, dynamic> profile,
+  Future<void> _callUser(Map<String, dynamic> initialProfile,
       {required bool isVideoCall}) async {
-    final isSeed = profile['isSeed'] == true || profile['isSeed'] == 'true';
-    final targetUid = profile['uid'];
-
-    print('DEBUG: Attempting call to ${profile['name']} (UID: $targetUid, isSeed: $isSeed)');
+    final targetUid = initialProfile['uid']?.toString() ?? '';
+    
+    if (targetUid.isEmpty) {
+      _showSnack('Invalid user ID', isError: true);
+      return;
+    }
 
     if (!_zegoInitialized) {
       print('DEBUG: Zego not initialized yet');
@@ -93,6 +95,17 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isCalling = true);
 
     try {
+      // 1. Always fetch the full profile from Firebase first!
+      // This is crucial because if the call is initiated from the Messages screen or Call History,
+      // the `initialProfile` map will be missing the `isSeed` and `adminUid` fields.
+      final mockUser = AppUser(uid: targetUid, displayName: '', email: '');
+      final fullProfile = await UserService.getUserData(mockUser);
+      
+      final profile = fullProfile ?? initialProfile; // fallback to initial if null
+      
+      final isSeed = profile['isSeed'] == true || profile['isSeed'] == 'true';
+      print('DEBUG: Attempting call to ${profile['name']} (UID: $targetUid, isSeed: $isSeed)');
+
       List<ZegoCallUser> invitees = [];
 
       if (isSeed &&
