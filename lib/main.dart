@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:zego_uikit_prebuilt_call/zego_uikit_prebuilt_call.dart';
 import 'package:chating/services/zego_service.dart';
 import 'package:chating/services/zim_service.dart';
+import 'package:chating/services/callkit_service.dart';
 
 /// ── Background FCM Message Handler ──────────────────────────────────────────
 /// MUST be a top-level function (not inside a class) and annotated with
@@ -31,11 +33,36 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   final data = message.data;
 
-  // 🚨 CRITICAL: Let Zego handle its own call notifications!
-  // If we show a local notification here, it will conflict with Zego's native 
-  // WhatsApp-like full-screen call intent and cause duplicate notifications.
+  // Intercept call notifications and show native CallKit/ConnectionService screen
   if (data.containsKey('zego') || data.containsKey('call_id')) {
-    print('📞 Zego Call detected in background. Letting ZPNs handle it natively.');
+    print('📞 Zego Call detected in background. Intercepting for CallKit...');
+    try {
+      String callId = data['call_id'] ?? '';
+      String callerName = data['caller_name'] ?? 'Incoming Call';
+      String? callerPhoto = data['caller_photo'] ?? data['avatar'];
+      bool isVideo = data['call_type'] == 'video' || data['is_video'] == 'true' || data['type'] == '1';
+
+      if (data.containsKey('zego')) {
+        final zegoData = jsonDecode(data['zego'] as String);
+        callId = zegoData['call_id'] ?? zegoData['invitation_id'] ?? callId;
+        callerName = zegoData['caller_name'] ?? zegoData['inviter_name'] ?? callerName;
+        callerPhoto = zegoData['caller_photo'] ?? zegoData['avatar'] ?? callerPhoto;
+        isVideo = zegoData['call_type'] == 'video' || zegoData['is_video'] == 'true' || zegoData['type'] == 1 || isVideo;
+      }
+      
+      if (callId.isEmpty) {
+        callId = DateTime.now().millisecondsSinceEpoch.toString();
+      }
+
+      await CallKitService.showCallkitIncoming(
+        callId: callId,
+        callerName: callerName,
+        callerPhoto: callerPhoto,
+        isVideo: isVideo,
+      );
+    } catch (e) {
+      print('❌ Error parsing Zego background notification: $e');
+    }
     return;
   }
 
@@ -138,6 +165,41 @@ class _MyAppState extends State<MyApp> {
   void initState() {
     super.initState();
     ZegoUIKitPrebuiltCallInvitationService().setNavigatorKey(navigatorKey);
+
+    // Initialize CallKit/ConnectionService event listeners
+    CallKitService.listenToEvents(
+      onAccept: (callId, isVideo) async {
+        print('🚀 CallKit accepted call: $callId');
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          final appUser = AppUser.fromFirebaseUser(currentUser);
+          final profile = await UserService.getUserData(appUser);
+          final displayName = profile?['name'] ?? currentUser.displayName ?? 'User';
+          
+          await ZegoService().init(userID: appUser.uid, userName: displayName);
+          
+          // Wait slightly for ZIM to sync the invitation state
+          await Future.delayed(const Duration(seconds: 1));
+          await ZegoUIKitPrebuiltCallInvitationService().accept();
+        }
+      },
+      onDecline: (callId) async {
+        print('🚀 CallKit declined call: $callId');
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          final appUser = AppUser.fromFirebaseUser(currentUser);
+          final profile = await UserService.getUserData(appUser);
+          final displayName = profile?['name'] ?? currentUser.displayName ?? 'User';
+          
+          await ZegoService().init(userID: appUser.uid, userName: displayName);
+          
+          // Wait slightly for ZIM to sync the invitation state
+          await Future.delayed(const Duration(seconds: 1));
+          await ZegoUIKitPrebuiltCallInvitationService().reject();
+          ZegoService().uninit();
+        }
+      },
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (NotificationService().pendingAction == 'accept') {

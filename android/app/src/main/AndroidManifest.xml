@@ -23,6 +23,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
 
     <application
         android:label="ZegoChat"
@@ -31,7 +32,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleInstance"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -52,13 +53,12 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Add this activity for ZegoCloud notifications -->
+        <!-- Commented out to let CallKit handle incoming call notifications instead of Zego's default UI
         <activity
             android:name="com.zegocloud.uikit.prebuilt.call.ZegoCallInvitationActivity"
             android:exported="false"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
 
-        <!-- Add these receivers for offline push -->
         <receiver
             android:name="com.zegocloud.uikit.prebuilt.call.ZegoCallInvitationNotificationReceiver"
             android:exported="false">
@@ -74,6 +74,7 @@
                 <action android:name="com.zegocloud.zpns.action.MESSAGE" />
             </intent-filter>
         </receiver>
+        -->
 
         <!-- firebase_messaging background service (required for killed-state FCM) -->
         <service

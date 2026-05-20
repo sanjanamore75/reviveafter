@@ -41,9 +41,11 @@ class ZegoService {
         plugins: [ZegoUIKitSignalingPlugin()],
         notificationConfig: ZegoCallInvitationNotificationConfig(
           androidNotificationConfig: ZegoCallAndroidNotificationConfig(
-            channelID: "ZegoSystemRing",
+            channelID: "ZegoSystemRingV2",
             channelName: "Call Notifications",
             icon: "default",
+            sound: "incoming",
+            vibrate: true,
             showOnFullScreen: true,
           ),
           iOSNotificationConfig: ZegoCallIOSNotificationConfig(

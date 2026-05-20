@@ -27,6 +27,9 @@ dependencies:
   zego_zim: ^2.29.0
   zego_uikit: any
 
+  # Native Calling UI
+  flutter_callkit_incoming: ^2.0.3
+
   # UI
   cupertino_icons: ^1.0.8
   firebase_storage: ^12.4.10
