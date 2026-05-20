@@ -1,0 +1,36 @@
+name: Flutter Cloud Build
+
+# Tells GitHub to run on both main and master branches
+on:
+  push:
+    branches: [ "main", "master" ]
+  # This magic line adds a "Run workflow" button to the Actions tab!
+  workflow_dispatch: 
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # Installs Flutter on the cloud computer
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+
+    - name: Install Dependencies
+      run: flutter pub get
+
+    # Builds the Flutter testing APK
+    - name: Build APK
+      run: flutter build apk --debug
+
+    # Uploads the finished APK for you to download
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: My-Flutter-App-APK
+        path: build/app/outputs/flutter-apk/app-debug.apk
