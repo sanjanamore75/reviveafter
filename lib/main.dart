@@ -21,6 +21,7 @@ import 'package:chating/services/zego_service.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:chating/services/zim_service.dart';
 import 'package:chating/services/callkit_service.dart';
+import 'package:chating/screens/chat_screen.dart';
 
 /// ── Background FCM Message Handler ──────────────────────────────────────────
 /// MUST be a top-level function (not inside a class) and annotated with
@@ -33,8 +34,23 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   final data = message.data;
 
-  // Intercept call notifications and show native CallKit/ConnectionService screen
-  if (data.containsKey('zego') || data.containsKey('call_id')) {
+  // Distinguish between Zego Calls and ZIM Messages
+  bool isCall = false;
+  if (data.containsKey('call_id')) {
+    isCall = true;
+  } else if (data.containsKey('zego')) {
+    try {
+      final zegoData = jsonDecode(data['zego'] as String);
+      if (zegoData.containsKey('call_id') ||
+          zegoData.containsKey('invitation_id') ||
+          zegoData.containsKey('call_type') ||
+          zegoData.containsKey('type')) {
+        isCall = true;
+      }
+    } catch (_) {}
+  }
+
+  if (isCall) {
     print('📞 Zego Call detected in background. Intercepting for CallKit...');
     try {
       String callId = data['call_id'] ?? '';
@@ -73,16 +89,33 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     return;
   }
 
-  String? senderName = data['sender_name'] ?? data['title'];
-  String title = message.notification?.title ?? senderName ?? 'New Message';
+  String? senderId = data['sender_id'];
+  String? parsedSenderName;
+
+  if (data.containsKey('payload')) {
+    try {
+      final payloadData = jsonDecode(data['payload'] as String);
+      senderId = payloadData['sender_id'] ?? senderId;
+      parsedSenderName = payloadData['sender_name'];
+    } catch (_) {}
+  }
+
+  String finalSenderName = parsedSenderName ?? data['sender_name'] ?? data['title'] ?? 'New Message';
+  String title = message.notification?.title ?? finalSenderName;
   String body =
       message.notification?.body ?? data['content'] ?? data['body'] ?? '';
 
   // Show local notification for CHAT MESSAGES only
+  final notificationPayload = jsonEncode({
+    'click_action': 'open_chat',
+    'sender_id': senderId ?? '',
+    'sender_name': finalSenderName,
+  });
+
   await NotificationService().showNotification(
     title: title,
     body: body,
-    payload: data.toString(),
+    payload: notificationPayload,
     isCall: false,
   );
 }
@@ -229,13 +262,94 @@ class _MyAppState extends State<MyApp> {
       },
     );
 
+    NotificationService().onChatNotificationTapped = (senderId, senderName) {
+      _navigateToChat(senderId);
+    };
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (NotificationService().pendingAction == 'accept') {
         print('🚀 App started via "Receive" button. Ensuring Zego is ready...');
         await Future.delayed(const Duration(seconds: 1));
         NotificationService().clearPendingAction();
       }
+
+      final pendingChatSenderId = NotificationService().pendingChatSenderId;
+      if (pendingChatSenderId != null && pendingChatSenderId.isNotEmpty) {
+        print('🚀 App started via chat notification. Navigating to chat...');
+        _navigateToChat(pendingChatSenderId);
+        NotificationService().clearPendingChatSenderId();
+      }
     });
+  }
+
+  Future<void> _navigateToChat(String senderId) async {
+    print('🚀 Navigating to chat with $senderId');
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      print('⚠️ No logged in user. Cannot navigate to chat.');
+      return;
+    }
+
+    final appUser = AppUser.fromFirebaseUser(currentUser);
+    final targetProfileUser = AppUser(uid: senderId, displayName: '', email: '');
+    final targetProfile = await UserService.getUserData(targetProfileUser);
+    if (targetProfile == null) {
+      print('⚠️ Sender profile not found.');
+      return;
+    }
+
+    Future<void> onCallUser(Map<String, dynamic> profile, {required bool isVideoCall}) async {
+      final targetUid = profile['uid']?.toString() ?? '';
+      if (targetUid.isEmpty) return;
+
+      final isSeed = profile['isSeed'] == true || profile['isSeed'] == 'true';
+      List<ZegoCallUser> invitees = [];
+      if (isSeed && profile['adminUid'] != null && profile['adminUid'].toString().isNotEmpty) {
+        final adminId = profile['adminUid'].toString();
+        invitees = [ZegoCallUser(adminId, profile['name'] ?? 'Admin')];
+      } else {
+        invitees = [ZegoCallUser(targetUid, profile['name'] ?? 'User')];
+      }
+
+      if (invitees.isEmpty || invitees.first.id.isEmpty) return;
+
+      final currentUserProfile = await UserService.getUserData(appUser);
+      final currentUserName = currentUserProfile?['name'] as String? ?? appUser.displayName;
+
+      final alertId = await UserService.saveCallAlert(
+        targetUid: invitees.first.id,
+        callerId: appUser.uid,
+        callerName: currentUserName,
+        callerPhoto: appUser.photoURL,
+        isVideo: isVideoCall,
+        status: 'missed',
+      );
+
+      final result = await ZegoUIKitPrebuiltCallInvitationService().send(
+        invitees: invitees,
+        isVideoCall: isVideoCall,
+        resourceID: 'zego_call',
+        timeoutSeconds: 60,
+      );
+
+      if (!result && alertId != null) {
+        await UserService.updateCallAlertStatus(
+          invitees.first.id,
+          alertId,
+          'offline',
+        );
+      }
+    }
+
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          currentUser: appUser,
+          targetProfile: targetProfile,
+          onCallUser: onCallUser,
+        ),
+      ),
+    );
   }
 
   /// Returns a cached profile future. Only re-fetches if the user changes.

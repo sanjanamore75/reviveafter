@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -26,6 +27,12 @@ class NotificationService {
   String? _pendingAction;
   String? get pendingAction => _pendingAction;
   void clearPendingAction() => _pendingAction = null;
+
+  String? _pendingChatSenderId;
+  String? get pendingChatSenderId => _pendingChatSenderId;
+  void clearPendingChatSenderId() => _pendingChatSenderId = null;
+
+  void Function(String senderId, String senderName)? onChatNotificationTapped;
 
   // ── Initialization ─────────────────────────────────────────────────────────
 
@@ -80,8 +87,13 @@ class NotificationService {
     final launchDetails =
         await _localNotifications.getNotificationAppLaunchDetails();
     if (launchDetails?.didNotificationLaunchApp ?? false) {
-      _pendingAction = launchDetails?.notificationResponse?.actionId;
+      final response = launchDetails?.notificationResponse;
+      _pendingAction = response?.actionId;
       print('🚀 App launched from notification action: $_pendingAction');
+      final payload = response?.payload;
+      if (payload != null && payload.isNotEmpty) {
+        _handleLocalNotificationPayload(payload);
+      }
     }
   }
 
@@ -125,6 +137,10 @@ class NotificationService {
           print('✅ Call accepted from notification');
         } else if (actionId == 'decline') {
           print('❌ Call declined from notification');
+        } else {
+          if (payload != null && payload.isNotEmpty) {
+            _handleLocalNotificationPayload(payload);
+          }
         }
       },
     );
@@ -208,6 +224,40 @@ class NotificationService {
 
   void _handleNotificationTap(RemoteMessage message) {
     print('👆 NotificationService: FCM Notification tapped: ${message.data}');
+    final data = message.data;
+    if (data.containsKey('payload')) {
+      _handleLocalNotificationPayload(data['payload'] as String);
+    } else if (data.containsKey('sender_id')) {
+      final senderId = data['sender_id']?.toString();
+      final senderName = data['sender_name']?.toString() ?? 'User';
+      if (senderId != null && senderId.isNotEmpty) {
+        _pendingChatSenderId = senderId;
+        if (onChatNotificationTapped != null) {
+          onChatNotificationTapped!(senderId, senderName);
+          clearPendingChatSenderId();
+        }
+      }
+    }
+  }
+
+  void _handleLocalNotificationPayload(String payload) {
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded['click_action'] == 'open_chat') {
+        final senderId = decoded['sender_id']?.toString();
+        final senderName = decoded['sender_name']?.toString() ?? 'User';
+        if (senderId != null && senderId.isNotEmpty) {
+          _pendingChatSenderId = senderId;
+          print('📬 Found pending chat sender ID: $_pendingChatSenderId');
+          if (onChatNotificationTapped != null) {
+            onChatNotificationTapped!(senderId, senderName);
+            clearPendingChatSenderId();
+          }
+        }
+      }
+    } catch (e) {
+      print('⚠️ Error parsing local notification payload: $e');
+    }
   }
 
   // ── Show Notification ──────────────────────────────────────────────────────

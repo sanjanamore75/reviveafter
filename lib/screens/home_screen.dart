@@ -71,14 +71,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initZego() async {
+    final profile = await UserService.getUserData(widget.user);
+    final userName = profile?['name'] as String? ?? widget.user.displayName;
+
     await ZegoService().init(
       userID: widget.user.uid,
-      userName: widget.user.displayName ?? 'User',
+      userName: userName,
     );
     // Also initialize ZIM (In-App Chat) for this user
     await ZimService().init(
       userID: widget.user.uid,
-      userName: widget.user.displayName ?? 'User',
+      userName: userName,
     );
     // ✅ Give the signaling plugin 2 seconds to fully connect before enabling calls
     await Future.delayed(const Duration(seconds: 2));
@@ -103,13 +106,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     // Ensure Zego and Zim are initialized in case they were cleaned up or lost connection
+    final profile = await UserService.getUserData(widget.user);
+    final userName = profile?['name'] as String? ?? widget.user.displayName;
+
     await ZegoService().init(
       userID: widget.user.uid,
-      userName: widget.user.displayName ?? 'User',
+      userName: userName,
     );
     await ZimService().init(
       userID: widget.user.uid,
-      userName: widget.user.displayName ?? 'User',
+      userName: userName,
     );
     if (mounted) {
       setState(() => _zegoInitialized = true);
@@ -165,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final alertId = await UserService.saveCallAlert(
           targetUid: invitee.id,
           callerId: widget.user.uid,
-          callerName: widget.user.displayName ?? 'User',
+          callerName: userName,
           callerPhoto: widget.user.photoURL,
           isVideo: isVideoCall,
           status: 'missed',

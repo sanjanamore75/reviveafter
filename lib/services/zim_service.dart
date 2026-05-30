@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:zego_zim/zego_zim.dart';
 import 'package:chating/config/zego_config.dart';
+import 'package:chating/services/user_service.dart';
+import 'package:chating/models/app_user.dart';
 
 class ZimMessage {
   final String fromUserID;
@@ -67,6 +70,27 @@ class ZimService {
               timestamp: msg.timestamp,
               isMine: false,
             ));
+
+            if (_currentUserID != null) {
+              final senderUID = fromUserID;
+              final previewText = msg.message.startsWith('[IMAGE]:') ? '📷 Image' : msg.message;
+              final mockUser = AppUser(uid: senderUID, displayName: '', email: '');
+
+              UserService.getUserData(mockUser).then((senderProfile) {
+                if (senderProfile != null) {
+                  UserService.saveConversation(
+                    myUID: _currentUserID!,
+                    targetProfile: senderProfile,
+                  ).then((_) {
+                    UserService.updateConversationLastMessage(
+                      myUID: _currentUserID!,
+                      targetUID: senderUID,
+                      message: previewText,
+                    );
+                  });
+                }
+              });
+            }
           }
         }
       };
@@ -123,7 +147,12 @@ class ZimService {
         ..pushConfig = (ZIMPushConfig()
           ..resourcesID = 'zim_offline_push'
           ..title = _currentUserName ?? 'New Message'
-          ..content = text.length > 80 ? '${text.substring(0, 80)}…' : text);
+          ..content = text.length > 80 ? '${text.substring(0, 80)}…' : text
+          ..payload = jsonEncode({
+            'sender_id': _currentUserID,
+            'sender_name': _currentUserName,
+            'click_action': 'open_chat',
+          }));
 
       await ZIM.getInstance()!.sendMessage(
         msg,

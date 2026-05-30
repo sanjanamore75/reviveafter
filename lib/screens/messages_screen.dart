@@ -120,194 +120,221 @@ class _ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCall = conv.containsKey('callerId');
-    final name =
-        isCall ? (conv['callerName'] ?? 'User') : (conv['name'] ?? 'User');
-    final photo = isCall
-        ? (conv['callerPhoto'] as String?)
-        : (conv['photoURL'] as String?);
-    final lastMsg = isCall ? '' : (conv['lastMessage'] ?? '');
-    final timestamp = (conv['lastActivity'] ?? conv['timestamp']) as int? ?? 0;
-    final timeStr = _formatTime(timestamp);
+    final targetUID = (conv['uid'] ?? conv['callerId'])?.toString() ?? '';
+    final mockUser = AppUser(uid: targetUID, displayName: '', email: '');
 
-    final status = conv['status'] as String?;
-    final isVideo = conv['isVideo'] == true;
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: UserService.getUserData(mockUser),
+      builder: (context, snapshot) {
+        final profile = snapshot.data;
+        final name = profile?['name'] as String? ??
+            (isCall ? (conv['callerName'] ?? 'User') : (conv['name'] ?? 'User'));
+        final photo = profile?['photoURL'] as String? ??
+            (isCall ? (conv['callerPhoto'] as String?) : (conv['photoURL'] as String?));
 
-    return GestureDetector(
-      onTap: () {
-        if (isCall) {
-          // If it's a call log, maybe navigate to profile or call back
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatScreen(
-                currentUser: currentUser,
-                targetProfile: {
-                  'uid': conv['callerId'],
-                  'name': name,
-                  'photoURL': photo,
-                },
-                onCallUser: onCallUser,
-              ),
-            ),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ChatScreen(
-                currentUser: currentUser,
-                targetProfile: conv,
-                onCallUser: onCallUser,
-              ),
-            ),
-          );
+        var lastMsg = isCall ? '' : (conv['lastMessage'] ?? '');
+        if (lastMsg.startsWith('[IMAGE]:')) {
+          lastMsg = '📷 Image';
         }
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isCall
-              ? Colors.white.withValues(alpha: 0.03)
-              : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Row(
-          children: [
-            // Avatar
-            Stack(
-              children: [
-                CircleAvatar(
-                  radius: 28,
-                  backgroundImage: (photo != null && photo.isNotEmpty)
-                      ? NetworkImage(photo)
-                      : null,
-                  backgroundColor:
-                      const Color(0xFF6C63FF).withValues(alpha: 0.2),
-                  child: (photo == null || photo.isEmpty)
-                      ? Text(name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                          style: const TextStyle(
-                              color: Color(0xFF6C63FF),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18))
-                      : null,
-                ),
-                if (!isCall)
-                  Positioned(
-                    right: 1,
-                    bottom: 1,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF00C9A7),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: const Color(0xFF1a1a2e), width: 2),
-                      ),
-                    ),
+        final timestamp = (conv['lastActivity'] ?? conv['timestamp']) as int? ?? 0;
+        final timeStr = _formatTime(timestamp);
+
+        final status = conv['status'] as String?;
+        final isVideo = conv['isVideo'] == true;
+
+        return GestureDetector(
+          onTap: () {
+            if (isCall) {
+              // If it's a call log, maybe navigate to profile or call back
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatScreen(
+                    currentUser: currentUser,
+                    targetProfile: {
+                      'uid': targetUID,
+                      'name': name,
+                      'photoURL': photo,
+                    },
+                    onCallUser: onCallUser,
                   ),
-              ],
+                ),
+              );
+            } else {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    currentUser: currentUser,
+                    targetProfile: {
+                      ...conv,
+                      'name': name,
+                      'photoURL': photo,
+                    },
+                    onCallUser: onCallUser,
+                  ),
+                ),
+              );
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: isCall
+                  ? Colors.white.withValues(alpha: 0.03)
+                  : Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
-            const SizedBox(width: 14),
-            // Name + last message / call info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 3),
-                  if (isCall)
-                    Row(
-                      children: [
-                        Icon(
-                          isVideo ? Icons.videocam_rounded : Icons.call_rounded,
-                          size: 14,
-                          color: status == 'missed'
-                              ? Colors.redAccent
-                              : Colors.white38,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          status?.toUpperCase() ?? 'CALL',
-                          style: TextStyle(
-                            color: status == 'missed'
-                                ? Colors.redAccent
-                                : Colors.white38,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+            child: Row(
+              children: [
+                // Avatar
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundImage: (photo != null && photo.isNotEmpty)
+                          ? NetworkImage(photo)
+                          : null,
+                      backgroundColor:
+                          const Color(0xFF6C63FF).withValues(alpha: 0.2),
+                      child: (photo == null || photo.isEmpty)
+                          ? Text(name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                              style: const TextStyle(
+                                  color: Color(0xFF6C63FF),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18))
+                          : null,
+                    ),
+                    if (!isCall)
+                      Positioned(
+                        right: 1,
+                        bottom: 1,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00C9A7),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: const Color(0xFF1a1a2e), width: 2),
                           ),
                         ),
-                      ],
-                    )
-                  else
-                    Text(
-                      lastMsg.isEmpty ? 'Tap to chat 💬' : lastMsg,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          color:
-                              lastMsg.isEmpty ? Colors.white24 : Colors.white54,
-                          fontSize: 13,
-                          fontStyle: lastMsg.isEmpty
-                              ? FontStyle.italic
-                              : FontStyle.normal),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Timestamp + call buttons
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(timeStr,
-                    style:
-                        const TextStyle(color: Colors.white38, fontSize: 11)),
-                const SizedBox(height: 8),
-                Row(
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 14),
+                // Name + last message / call info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 3),
+                      if (isCall)
+                        Row(
+                          children: [
+                            Icon(
+                              isVideo
+                                  ? Icons.videocam_rounded
+                                  : Icons.call_rounded,
+                              size: 14,
+                              color: status == 'missed'
+                                  ? Colors.redAccent
+                                  : Colors.white38,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              status?.toUpperCase() ?? 'CALL',
+                              style: TextStyle(
+                                color: status == 'missed'
+                                    ? Colors.redAccent
+                                    : Colors.white38,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        )
+                      else
+                        Text(
+                          lastMsg.isEmpty ? 'Tap to chat 💬' : lastMsg,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: lastMsg.isEmpty
+                                  ? Colors.white24
+                                  : Colors.white54,
+                              fontSize: 13,
+                              fontStyle: lastMsg.isEmpty
+                                  ? FontStyle.italic
+                                  : FontStyle.normal),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Timestamp + call buttons
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _SmallCallBtn(
-                      icon: Icons.call_rounded,
-                      color: const Color(0xFF00C9A7),
-                      onTap: () {
-                        final targetProfile = isCall
-                            ? {
-                                'uid': conv['callerId'],
-                                'name': name,
-                                'photoURL': photo,
-                              }
-                            : conv;
-                        onCallUser(targetProfile, isVideoCall: false);
-                      },
-                    ),
-                    const SizedBox(width: 6),
-                    _SmallCallBtn(
-                      icon: Icons.videocam_rounded,
-                      color: const Color(0xFF6C63FF),
-                      onTap: () {
-                        final targetProfile = isCall
-                            ? {
-                                'uid': conv['callerId'],
-                                'name': name,
-                                'photoURL': photo,
-                              }
-                            : conv;
-                        onCallUser(targetProfile, isVideoCall: true);
-                      },
+                    Text(timeStr,
+                        style: const TextStyle(
+                            color: Colors.white38, fontSize: 11)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _SmallCallBtn(
+                          icon: Icons.call_rounded,
+                          color: const Color(0xFF00C9A7),
+                          onTap: () {
+                            final targetProfile = isCall
+                                ? {
+                                    'uid': targetUID,
+                                    'name': name,
+                                    'photoURL': photo,
+                                  }
+                                : {
+                                    ...conv,
+                                    'name': name,
+                                    'photoURL': photo,
+                                  };
+                            onCallUser(targetProfile, isVideoCall: false);
+                          },
+                        ),
+                        const SizedBox(width: 6),
+                        _SmallCallBtn(
+                          icon: Icons.videocam_rounded,
+                          color: const Color(0xFF6C63FF),
+                          onTap: () {
+                            final targetProfile = isCall
+                                ? {
+                                    'uid': targetUID,
+                                    'name': name,
+                                    'photoURL': photo,
+                                  }
+                                : {
+                                    ...conv,
+                                    'name': name,
+                                    'photoURL': photo,
+                                  };
+                            onCallUser(targetProfile, isVideoCall: true);
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

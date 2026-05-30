@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:chating/models/app_user.dart';
 import 'package:chating/services/zim_service.dart';
 import 'package:chating/services/user_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class ChatScreen extends StatefulWidget {
   final AppUser currentUser;
@@ -28,6 +31,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
   List<Map<String, dynamic>> _messages = [];
   bool _isLoading = true;
+  bool _isUploading = false;
+  final ImagePicker _picker = ImagePicker();
   StreamSubscription<ZimMessage>? _sub;
 
   String get _targetUID => widget.targetProfile['uid']?.toString() ?? '';
@@ -42,8 +47,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _sub = _zim.messageStream
         .where((m) => m.fromUserID == _targetUID)
         .listen((msg) {
-      setState(() => _messages.insert(0, msg.toMap()));
-      // No need to scroll manually with reverse: true for new messages
+      setState(() {
+        _messages.insert(0, msg.toMap());
+        _messages.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+      });
     });
   }
 
@@ -60,6 +67,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (mounted) {
       setState(() {
         _messages = history.map((m) => m.toMap()).toList();
+        _messages.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
         _isLoading = false;
       });
     }
@@ -78,6 +86,7 @@ class _ChatScreenState extends State<ChatScreen> {
         'timestamp': DateTime.now().millisecondsSinceEpoch,
         'isMine': true,
       });
+      _messages.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
     });
 
     // 2. Send via ZIM in the background
@@ -96,6 +105,67 @@ class _ChatScreenState extends State<ChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Failed to send message')),
         );
+      }
+    }
+  }
+
+  Future<void> _pickAndSendImage() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 70,
+      );
+      if (picked == null) return;
+
+      setState(() => _isUploading = true);
+
+      final file = File(picked.path);
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('chat_images')
+          .child(widget.currentUser.uid)
+          .child(fileName);
+
+      await ref.putFile(file);
+      final downloadUrl = await ref.getDownloadURL();
+
+      final imageUrlText = '[IMAGE]:$downloadUrl';
+      setState(() {
+        _messages.insert(0, {
+          'fromUserID': widget.currentUser.uid,
+          'text': imageUrlText,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+          'isMine': true,
+        });
+        _messages.sort((a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int));
+      });
+
+      final success = await _zim.sendTextMessage(_targetUID, imageUrlText);
+
+      if (success) {
+        await UserService.updateConversationLastMessage(
+          myUID: widget.currentUser.uid,
+          targetUID: _targetUID,
+          message: '📷 Image',
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to send image message')),
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error sending image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error uploading image: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
       }
     }
   }
@@ -306,6 +376,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildBubble(
       {required String text, required bool isMine, required int timestamp}) {
     final time = _formatTime(timestamp);
+    final isImage = text.startsWith('[IMAGE]:');
+    final imageUrl = isImage ? text.substring(8) : '';
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -318,7 +390,9 @@ class _ChatScreenState extends State<ChatScreen> {
           left: isMine ? 60 : 0,
           right: isMine ? 0 : 60,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: isImage
+            ? const EdgeInsets.all(4)
+            : const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           gradient: isMine
               ? const LinearGradient(
@@ -340,16 +414,82 @@ class _ChatScreenState extends State<ChatScreen> {
           crossAxisAlignment:
               isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
-            Text(text,
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 15, height: 1.4)),
-            const SizedBox(height: 4),
-            Text(time,
-                style: TextStyle(
-                    color: isMine
-                        ? Colors.white.withValues(alpha: 0.55)
-                        : Colors.white38,
-                    fontSize: 10)),
+            if (isImage)
+              GestureDetector(
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      insetPadding: EdgeInsets.zero,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          InteractiveViewer(
+                            child: Image.network(imageUrl),
+                          ),
+                          Positioned(
+                            top: 40,
+                            right: 20,
+                            child: IconButton(
+                              icon: const Icon(Icons.close_rounded,
+                                  color: Colors.white, size: 30),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        width: 200,
+                        height: 200,
+                        color: Colors.white.withValues(alpha: 0.05),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF6C63FF),
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      width: 200,
+                      height: 200,
+                      color: Colors.white.withValues(alpha: 0.05),
+                      child: const Center(
+                        child: Icon(
+                          Icons.broken_image_rounded,
+                          color: Colors.white38,
+                          size: 40,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Text(text,
+                  style: const TextStyle(
+                      color: Colors.white, fontSize: 15, height: 1.4)),
+            Padding(
+              padding: isImage
+                  ? const EdgeInsets.only(right: 8, bottom: 4, top: 4)
+                  : EdgeInsets.zero,
+              child: Text(time,
+                  style: TextStyle(
+                      color: isMine
+                          ? Colors.white.withValues(alpha: 0.55)
+                          : Colors.white38,
+                      fontSize: 10)),
+            ),
           ],
         ),
       ),
@@ -376,6 +516,24 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         child: Row(
           children: [
+            if (_isUploading)
+              const SizedBox(
+                width: 40,
+                height: 40,
+                child: Padding(
+                  padding: EdgeInsets.all(10),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF6C63FF),
+                  ),
+                ),
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.image_rounded, color: Color(0xFF6C63FF)),
+                onPressed: _pickAndSendImage,
+              ),
+            const SizedBox(width: 4),
             Expanded(
               child: Container(
                 decoration: BoxDecoration(

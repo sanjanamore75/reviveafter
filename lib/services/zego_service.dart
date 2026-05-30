@@ -3,6 +3,7 @@ import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 import 'package:zego_zpns/zego_zpns.dart';
 import 'package:chating/config/zego_config.dart';
 import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
+import 'package:chating/services/callkit_service.dart';
 
 class ZegoService {
   static final ZegoService _instance = ZegoService._internal();
@@ -40,16 +41,11 @@ class ZegoService {
         userID: userID,
         userName: userName,
         plugins: [ZegoUIKitSignalingPlugin()],
-        ringtoneConfig: ZegoRingtoneConfig(
-          incomingCallPath: "assets/ringtone/incoming.mp3",
-          outgoingCallPath: "assets/ringtone/incoming.mp3",
-        ),
         notificationConfig: ZegoCallInvitationNotificationConfig(
           androidNotificationConfig: ZegoCallAndroidNotificationConfig(
-            channelID: "ZegoSystemRingV2",
+            channelID: "ZegoDefaultSystemRingtoneChannel",
             channelName: "Call Notifications",
             icon: "default",
-            sound: "incoming",
             vibrate: true,
             showOnFullScreen: true,
           ),
@@ -64,6 +60,16 @@ class ZegoService {
               FlutterRingtonePlayer().playRingtone(asAlarm: false, looping: true);
             } catch (e) {
               print('⚠️ ZegoService error playing system ringtone: $e');
+            }
+
+            if (CallKitService.acceptingCallId != null) {
+              print('🚀 ZegoService: Call already accepted via CallKit. Direct accept triggered.');
+              ZegoUIKitPrebuiltCallInvitationService().accept();
+              CallKitService.acceptingCallId = null;
+            } else if (CallKitService.decliningCallId != null) {
+              print('🚀 ZegoService: Call already declined via CallKit. Direct reject triggered.');
+              ZegoUIKitPrebuiltCallInvitationService().reject();
+              CallKitService.decliningCallId = null;
             }
           },
           onIncomingCallAcceptButtonPressed: () {
