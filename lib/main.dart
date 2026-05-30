@@ -444,8 +444,7 @@ class _MyAppState extends State<MyApp> {
                 builder: (context, profileSnap) {
                   if (profileSnap.hasError) {
                     return ErrorScreen(
-                      message:
-                          'Database Error: ${profileSnap.error}\n\nCheck your internet connection or database rules.',
+                      message: 'Check your internet connection',
                       onRetry: () {
                         // Clear cache and retry
                         setState(() {

@@ -23,6 +23,7 @@ class _AdminScreenState extends State<AdminScreen> {
   final _urlController = TextEditingController();
 
   String _selectedGender = 'female';
+  String _selectedStatus = 'online';
   bool _useImageUrl = false;
   File? _pickedImage;
   bool _isSaving = false;
@@ -368,6 +369,7 @@ class _AdminScreenState extends State<AdminScreen> {
         gender: _selectedGender,
         photoURL: photoURL,
         adminUid: currentUser.uid,
+        status: _selectedStatus,
       );
 
       _showSnack('Profile pushed successfully!', isError: false);
@@ -377,6 +379,7 @@ class _AdminScreenState extends State<AdminScreen> {
         _nameController.clear();
         _urlController.clear();
         _pickedImage = null;
+        _selectedStatus = 'online';
       });
     } catch (e) {
       _showSnack('Failed to push profile: $e', isError: true);
@@ -490,6 +493,21 @@ class _AdminScreenState extends State<AdminScreen> {
                             Expanded(
                                 child: _buildGenderChoice('female', '👩 Female',
                                     const Color(0xFFE91E8C))),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Status Selector
+                        _buildLabel('Status'),
+                        Row(
+                          children: [
+                            Expanded(
+                                child: _buildStatusChoice('online', '🟢 Online',
+                                    const Color(0xFF00C9A7))),
+                            const SizedBox(width: 12),
+                            Expanded(
+                                child: _buildStatusChoice('busy', '🟠 Busy',
+                                    Colors.orangeAccent)),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -652,6 +670,23 @@ class _AdminScreenState extends State<AdminScreen> {
                                                 backgroundImage: NetworkImage(
                                                     p['photoURL'] ?? ''),
                                               ),
+                                              Positioned(
+                                                right: 0,
+                                                bottom: 0,
+                                                child: Container(
+                                                  width: 10,
+                                                  height: 10,
+                                                  decoration: BoxDecoration(
+                                                    color: p['status'] == 'busy'
+                                                        ? Colors.orangeAccent
+                                                        : const Color(0xFF00C9A7),
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(
+                                                        color: const Color(0xFF1a1a2e),
+                                                        width: 1.5),
+                                                  ),
+                                                ),
+                                              ),
                                               if (hasAlerts)
                                                 Positioned(
                                                   right: -4,
@@ -679,9 +714,83 @@ class _AdminScreenState extends State<AdminScreen> {
                                                 ),
                                             ],
                                           ),
-                                          title: Text(p['name'] ?? '',
-                                              style: const TextStyle(
-                                                  color: Colors.white)),
+                                          title: Row(
+
+                                            children: [
+
+                                              Text(p['name'] ?? '',
+
+                                                  style: const TextStyle(
+
+                                                      color: Colors.white)),
+
+                                              const SizedBox(width: 8),
+
+                                              GestureDetector(
+
+                                                onTap: () async {
+
+                                                  final newStatus = p['status'] == 'busy' ? 'online' : 'busy';
+
+                                                  await UserService.getUserRef(
+
+                                                    AppUser(
+
+                                                      uid: p['uid'] ?? '',
+
+                                                      displayName: '',
+
+                                                      email: '',
+
+                                                    ),
+
+                                                  ).update({'status': newStatus});
+
+                                                },
+
+                                                child: Container(
+
+                                                  padding: const EdgeInsets.symmetric(
+
+                                                      horizontal: 6, vertical: 2),
+
+                                                  decoration: BoxDecoration(
+
+                                                    color: (p['status'] == 'busy' ? Colors.orangeAccent : const Color(0xFF00C9A7))
+
+                                                        .withValues(alpha: 0.15),
+
+                                                    border: Border.all(
+
+                                                        color: p['status'] == 'busy' ? Colors.orangeAccent : const Color(0xFF00C9A7),
+
+                                                        width: 1),
+
+                                                    borderRadius: BorderRadius.circular(12),
+
+                                                  ),
+
+                                                  child: Text(
+
+                                                    p['status'] == 'busy' ? 'Busy' : 'Online',
+
+                                                    style: TextStyle(
+
+                                                        color: p['status'] == 'busy' ? Colors.orangeAccent : const Color(0xFF00C9A7),
+
+                                                        fontSize: 10,
+
+                                                        fontWeight: FontWeight.bold),
+
+                                                  ),
+
+                                                ),
+
+                                              ),
+
+                                            ],
+
+                                          ),
                                           subtitle: Text(p['uid'] ?? '',
                                               style: const TextStyle(
                                                   color: Colors.white38,
@@ -807,6 +916,28 @@ class _AdminScreenState extends State<AdminScreen> {
     final isSelected = _selectedGender == gender;
     return GestureDetector(
       onTap: () => setState(() => _selectedGender = gender),
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? color.withValues(alpha: 0.2)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isSelected ? color : Colors.white12),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+            style: TextStyle(
+                color: isSelected ? color : Colors.white54,
+                fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildStatusChoice(String status, String label, Color color) {
+    final isSelected = _selectedStatus == status;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedStatus = status),
       child: Container(
         height: 50,
         decoration: BoxDecoration(

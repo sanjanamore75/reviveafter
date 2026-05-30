@@ -26,15 +26,23 @@ class UserService {
       currentCoins = int.tryParse(snap.value.toString()) ?? 50;
     }
 
+    // Default status to 'online' if not present
+    final statusSnap = await ref.child('status').get();
+    String currentStatus = 'online';
+    if (statusSnap.exists && statusSnap.value != null) {
+      currentStatus = statusSnap.value.toString();
+    }
+
     await ref.update({
       'uid': user.uid,
-      'name': name ?? user.displayName ?? 'User',
-      'email': user.email ?? '',
+      'name': name ?? user.displayName,
+      'email': user.email,
       'photoURL': photoURL ?? user.photoURL ?? '',
       'gender': gender,
       'lookingFor': lookingFor ?? (gender == 'male' ? 'female' : 'male'),
       'phone': phone ?? '',
       'coins': currentCoins,
+      'status': currentStatus,
       'createdAt': ServerValue.timestamp,
     });
   }
@@ -101,7 +109,7 @@ class UserService {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data == null) return [];
 
-      return data.values
+      final list = data.values
           .map((e) => Map<String, dynamic>.from(e as Map))
           .where((user) {
         // 1. Exclude self
@@ -125,6 +133,9 @@ class UserService {
         }
         return gender == lookingFor;
       }).toList();
+
+      list.shuffle();
+      return list;
     });
   }
 
@@ -170,6 +181,7 @@ class UserService {
     required String gender,
     required String photoURL,
     required String adminUid,
+    String status = 'online',
   }) async {
     final docRef = _db.ref('users').push(); // Auto-generate UID
     await docRef.set({
@@ -180,6 +192,7 @@ class UserService {
       'gender': gender,
       'isSeed': true, // helps the admin identify which profiles were pushed
       'adminUid': adminUid,
+      'status': status,
       'createdAt': ServerValue.timestamp,
     }).timeout(const Duration(seconds: 10), onTimeout: () {
       throw Exception(
@@ -369,5 +382,14 @@ class UserService {
 
       yield uniqueProfiles.values.toList();
     }
+  }
+
+  /// Returns a stream of a specific user's database entry.
+  static Stream<Map<String, dynamic>?> getUserStream(String uid) {
+    return _db.ref('users/$uid').onValue.map((event) {
+      final data = event.snapshot.value as Map<dynamic, dynamic>?;
+      if (data == null) return null;
+      return Map<String, dynamic>.from(data);
+    });
   }
 }

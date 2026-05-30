@@ -41,6 +41,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
+    _zegoInitialized = ZegoService().isInitialized;
     _initZego();
     _currentInterest =
         widget.lookingFor ?? (widget.myGender == 'male' ? 'female' : 'male');
@@ -74,6 +75,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final profile = await UserService.getUserData(widget.user);
     final userName = profile?['name'] as String? ?? widget.user.displayName;
 
+    final wasInitialized = ZegoService().isInitialized;
+
     await ZegoService().init(
       userID: widget.user.uid,
       userName: userName,
@@ -83,9 +86,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       userID: widget.user.uid,
       userName: userName,
     );
-    // ✅ Give the signaling plugin 2 seconds to fully connect before enabling calls
-    await Future.delayed(const Duration(seconds: 2));
-    if (mounted) setState(() => _zegoInitialized = true);
+
+    if (wasInitialized) {
+      if (mounted) {
+        setState(() {
+          _zegoInitialized = ZegoService().isInitialized;
+        });
+      }
+    } else {
+      // ✅ Give the signaling plugin 2 seconds to fully connect before enabling calls
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) {
+        setState(() {
+          _zegoInitialized = ZegoService().isInitialized;
+        });
+      }
+    }
   }
 
   @override
@@ -118,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       userName: userName,
     );
     if (mounted) {
-      setState(() => _zegoInitialized = true);
+      setState(() => _zegoInitialized = ZegoService().isInitialized);
     }
 
     if (!_zegoInitialized) {
@@ -287,6 +303,55 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         Text(email,
                             style: const TextStyle(
                                 color: Colors.white54, fontSize: 14)),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('Status: ',
+                                style: TextStyle(
+                                    color: Colors.white70, fontSize: 14)),
+                            const SizedBox(width: 8),
+                            DropdownButton<String>(
+                              value: profile?['status'] == 'busy' ? 'busy' : 'online',
+                              dropdownColor: const Color(0xFF16213e),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 14),
+                              icon: const Icon(Icons.arrow_drop_down,
+                                  color: Color(0xFF6C63FF)),
+                              underline: const SizedBox(),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'online',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.circle,
+                                          color: Color(0xFF00C9A7), size: 12),
+                                      SizedBox(width: 8),
+                                      Text('Online'),
+                                    ],
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'busy',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.circle,
+                                          color: Colors.orangeAccent, size: 12),
+                                      SizedBox(width: 8),
+                                      Text('Busy'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              onChanged: (val) async {
+                                if (val != null) {
+                                  await UserService.getUserRef(widget.user)
+                                      .update({'status': val});
+                                }
+                              },
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -689,14 +754,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           return _buildEmptyState();
         }
 
-        return GridView.builder(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 14,
-            mainAxisSpacing: 14,
-            childAspectRatio: 0.72,
-          ),
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           itemCount: profiles.length,
           itemBuilder: (context, index) {
             final profile = profiles[index];
@@ -1157,188 +1216,286 @@ class _ProfileCard extends StatelessWidget {
     required this.onTap,
   });
 
+  void _showFullImage(BuildContext context, String imageUrl, String name) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: 0.9),
+      builder: (context) => GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              InteractiveViewer(
+                minScale: 0.5,
+                maxScale: 4.0,
+                child: Image.network(
+                  imageUrl,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF6C63FF),
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) => const Center(
+                    child: Icon(Icons.broken_image_rounded, color: Colors.white30, size: 64),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 40,
+                right: 20,
+                child: SafeArea(
+                  child: Material(
+                    color: Colors.black54,
+                    shape: const CircleBorder(),
+                    child: IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white, size: 24),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 40,
+                left: 20,
+                child: SafeArea(
+                  child: Material(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      child: Text(
+                        name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = profile['name'] ?? 'User';
     final photoURL = profile['photoURL'] as String?;
     final gender = profile['gender'] ?? 'male';
+    final status = profile['status'] ?? 'online';
+    final isBusy = status == 'busy';
     final genderColor =
         gender == 'female' ? const Color(0xFFE91E8C) : const Color(0xFF4F8EF7);
-    final genderIcon = gender == 'female' ? '♀' : '♂';
-    final enabled = !isCallingAny && isZegoReady;
+    final enabled = !isCallingAny;
 
     return GestureDetector(
       onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // 1. Background Image
-              (photoURL != null && photoURL.isNotEmpty)
-                  ? Image.network(
-                      photoURL,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        color: genderColor.withValues(alpha: 0.2),
-                        child: Center(
-                          child: Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                            style: TextStyle(
-                                color: genderColor,
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold),
-                          ),
-                        ),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // 1. Large Circle Profile Image
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                GestureDetector(
+                  onTap: (photoURL != null && photoURL.isNotEmpty)
+                      ? () => _showFullImage(context, photoURL, name)
+                      : null,
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: genderColor.withValues(alpha: 0.6),
+                        width: 2.5,
                       ),
-                    )
-                  : Container(
-                      color: genderColor.withValues(alpha: 0.2),
-                      child: Center(
-                        child: Text(
-                          name.isNotEmpty ? name[0].toUpperCase() : 'U',
-                          style: TextStyle(
-                              color: genderColor,
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-
-              // 2. Dark Gradient Overlay at the bottom for readability
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.2),
-                        Colors.black.withValues(alpha: 0.8),
+                      boxShadow: [
+                        BoxShadow(
+                          color: genderColor.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        )
                       ],
-                      stops: const [0.4, 0.7, 1.0],
+                    ),
+                    child: ClipOval(
+                      child: (photoURL != null && photoURL.isNotEmpty)
+                          ? Image.network(
+                              photoURL,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: genderColor.withValues(alpha: 0.15),
+                                child: Center(
+                                  child: Text(
+                                    name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                    style: TextStyle(
+                                        color: genderColor,
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: genderColor.withValues(alpha: 0.15),
+                              child: Center(
+                                child: Text(
+                                  name.isNotEmpty ? name[0].toUpperCase() : 'U',
+                                  style: TextStyle(
+                                      color: genderColor,
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
                     ),
                   ),
                 ),
-              ),
-
-              // 3. Gender Icon Badge (Top Right)
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: genderColor.withValues(alpha: 0.9),
-                    shape: BoxShape.circle,
+                Positioned(
+                  right: 4,
+                  bottom: 4,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: isBusy ? Colors.orangeAccent : const Color(0xFF00C9A7),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: const Color(0xFF1a1a2e), width: 2),
+                    ),
                   ),
-                  child: Center(
-                    child: Text(
-                      genderIcon,
-                      style: const TextStyle(
+                ),
+              ],
+            ),
+            const SizedBox(width: 16),
+
+            // 2. Info details
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: isBusy ? Colors.orangeAccent : const Color(0xFF00C9A7),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isBusy ? 'Busy' : 'Online',
+                        style: TextStyle(
+                          color: isBusy ? Colors.orangeAccent : const Color(0xFF00C9A7),
                           fontSize: 12,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ),
-
-              // 4. Details Column (Bottom overlay)
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    // Action Buttons Row
-                    Row(
-                      children: [
-                        // Voice Call Button
-                        Expanded(
-                          child: InkWell(
-                            onTap: enabled ? onVoiceCall : null,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              decoration: BoxDecoration(
-                                color: enabled
-                                    ? const Color(0xFF00C9A7).withValues(alpha: 0.2)
-                                    : Colors.white.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: enabled
-                                        ? const Color(0xFF00C9A7).withValues(alpha: 0.4)
-                                        : Colors.white12),
-                              ),
-                              child: Icon(
-                                Icons.call_rounded,
-                                color: enabled ? const Color(0xFF00C9A7) : Colors.white24,
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Video Call Button
-                        Expanded(
-                          child: InkWell(
-                            onTap: enabled ? onVideoCall : null,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              decoration: BoxDecoration(
-                                color: enabled
-                                    ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
-                                    : Colors.white.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: enabled
-                                        ? const Color(0xFF6C63FF).withValues(alpha: 0.4)
-                                        : Colors.white12),
-                              ),
-                              child: Icon(
-                                Icons.videocam_rounded,
-                                color: enabled ? const Color(0xFF6C63FF) : Colors.white24,
-                                size: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+
+            // 3. Audio & Video Call buttons
+            Row(
+              children: [
+                _CallActionButton(
+                  icon: Icons.call_rounded,
+                  color: const Color(0xFF00C9A7),
+                  enabled: enabled,
+                  onTap: onVoiceCall,
+                ),
+                const SizedBox(width: 8),
+                _CallActionButton(
+                  icon: Icons.videocam_rounded,
+                  color: const Color(0xFF6C63FF),
+                  enabled: enabled,
+                  onTap: onVideoCall,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CallActionButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _CallActionButton({
+    required this.icon,
+    required this.color,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: enabled
+              ? color.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: enabled
+                  ? color.withValues(alpha: 0.25)
+                  : Colors.white12),
+        ),
+        child: Icon(
+          icon,
+          color: enabled ? color : Colors.white24,
+          size: 18,
         ),
       ),
     );

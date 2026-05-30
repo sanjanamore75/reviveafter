@@ -121,10 +121,9 @@ class _ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCall = conv.containsKey('callerId');
     final targetUID = (conv['uid'] ?? conv['callerId'])?.toString() ?? '';
-    final mockUser = AppUser(uid: targetUID, displayName: '', email: '');
 
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: UserService.getUserData(mockUser),
+    return StreamBuilder<Map<String, dynamic>?>(
+      stream: UserService.getUserStream(targetUID),
       builder: (context, snapshot) {
         final profile = snapshot.data;
         final name = profile?['name'] as String? ??
@@ -215,7 +214,9 @@ class _ConversationTile extends StatelessWidget {
                           width: 12,
                           height: 12,
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00C9A7),
+                            color: (profile?['status'] == 'busy')
+                                ? Colors.orangeAccent
+                                : const Color(0xFF00C9A7),
                             shape: BoxShape.circle,
                             border: Border.all(
                                 color: const Color(0xFF1a1a2e), width: 2),
