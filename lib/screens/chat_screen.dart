@@ -93,12 +93,29 @@ class _ChatScreenState extends State<ChatScreen> {
     final success = await _zim.sendTextMessage(_targetUID, text);
 
     if (success) {
-      // Update last message preview in Firebase
+      // Update last message preview in Firebase (for my list)
       await UserService.updateConversationLastMessage(
         myUID: widget.currentUser.uid,
         targetUID: _targetUID,
         message: text,
       );
+
+      // If target is a seed/pushed profile, sync conversation to target's node so admin receives alert
+      final isSeed = widget.targetProfile['isSeed'] == true || widget.targetProfile['isSeed'] == 'true';
+      if (isSeed) {
+        final currentUserProfile = await UserService.getUserData(widget.currentUser);
+        if (currentUserProfile != null) {
+          await UserService.saveConversation(
+            myUID: _targetUID,
+            targetProfile: currentUserProfile,
+          );
+          await UserService.updateConversationLastMessage(
+            myUID: _targetUID,
+            targetUID: widget.currentUser.uid,
+            message: text,
+          );
+        }
+      }
     } else {
       // Handle failure (optional: remove message or show error)
       if (mounted) {
@@ -149,6 +166,23 @@ class _ChatScreenState extends State<ChatScreen> {
           targetUID: _targetUID,
           message: '📷 Image',
         );
+
+        // If target is a seed/pushed profile, sync conversation to target's node so admin receives alert
+        final isSeed = widget.targetProfile['isSeed'] == true || widget.targetProfile['isSeed'] == 'true';
+        if (isSeed) {
+          final currentUserProfile = await UserService.getUserData(widget.currentUser);
+          if (currentUserProfile != null) {
+            await UserService.saveConversation(
+              myUID: _targetUID,
+              targetProfile: currentUserProfile,
+            );
+            await UserService.updateConversationLastMessage(
+              myUID: _targetUID,
+              targetUID: widget.currentUser.uid,
+              message: '📷 Image',
+            );
+          }
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

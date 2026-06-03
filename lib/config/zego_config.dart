@@ -1,15 +1,15 @@
 class ZegoConfig {
   // ── Voice & Video Call Credentials ──────────────────────────────────────
-  static const int appID = 254984022;
+  static const int appID = 930092129;
   static const String appSign =
-      '50bf56f19c62fb56843d445c57232d2498c0e2556fbb15aba9d3f078fb75a084';
-  static const String serverSecret = 'edfb6cee9d5752fb8e5f61b5a250d230';
-  static const String callbackSecret = '50bf56f19c62fb56843d445c57232d24';
+      '9ca49bdb9fbd1299066e83997705a44e9fc7d4408bfc7fd5ca4d433a3d340e49';
+  static const String serverSecret = 'c0701b420643e4aa41ecc67247c9b408';
+  static const String callbackSecret = '9ca49bdb9fbd1299066e83997705a44e';
 
   // ── In-App Chat (ZIM) Credentials ────────────────────────────────────────
-  static const int zimAppID = 1294310680;
+  static const int zimAppID = 930092129;
   static const String zimAppSign =
-      '7e7fafb434e3356ec201bc5590cf9d3264f2bcc98360ad9a67b40889769212aa';
-  static const String zimServerSecret = '59a18364fc6f5da41fc73ed9187766f9';
-  static const String zimCallbackSecret = '7e7fafb434e3356ec201bc5590cf9d32';
+      '9ca49bdb9fbd1299066e83997705a44e9fc7d4408bfc7fd5ca4d433a3d340e49';
+  static const String zimServerSecret = 'c0701b420643e4aa41ecc67247c9b408';
+  static const String zimCallbackSecret = '9ca49bdb9fbd1299066e83997705a44e';
 }

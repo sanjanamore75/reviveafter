@@ -47,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         widget.lookingFor ?? (widget.myGender == 'male' ? 'female' : 'male');
     _searchController.addListener(
         () => setState(() => _searchText = _searchController.text.trim()));
+    UserService.randomizeStatusesIfAllOnline();
   }
 
   @override
@@ -164,9 +165,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           profile['adminUid'] != null &&
           profile['adminUid'].toString().isNotEmpty) {
         final adminId = profile['adminUid'].toString();
-        print('DEBUG: Calling Admin UID: $adminId for seed profile');
-        // Ring only the specific admin who created this profile
-        invitees = [ZegoCallUser(adminId, profile['name'] ?? 'Admin')];
+        print('DEBUG: Calling Admin UID: $adminId and Seed UID: $targetUid for seed profile');
+        // Invite both the admin and the seed profile UID to handle both modes (spoofing and non-spoofing)
+        invitees = [
+          ZegoCallUser(targetUid.toString(), profile['name'] ?? 'User'),
+          ZegoCallUser(adminId, profile['name'] ?? 'Admin'),
+        ];
       } else {
         print('DEBUG: Calling regular User UID: $targetUid');
         // Normal 1-on-1 call for real users or fallback
@@ -181,19 +185,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
 
-      // ✅ Create call alerts for all invitees
-      final Map<String, String> alertIds = {};
-      for (var invitee in invitees) {
-        final alertId = await UserService.saveCallAlert(
-          targetUid: invitee.id,
-          callerId: widget.user.uid,
-          callerName: userName,
-          callerPhoto: widget.user.photoURL,
-          isVideo: isVideoCall,
-          status: 'missed',
-        );
-        if (alertId != null) alertIds[invitee.id] = alertId;
-      }
+      // ✅ Create call alert for the target user (which is the seed profile or real user)
+      final alertId = await UserService.saveCallAlert(
+        targetUid: targetUid,
+        callerId: widget.user.uid,
+        callerName: userName,
+        callerPhoto: widget.user.photoURL,
+        isVideo: isVideoCall,
+        status: 'missed',
+      );
 
       print(
           '📣 Sending call invitation to: ${invitees.map((u) => u.id).toList()} with resourceID: zego_call');
@@ -207,11 +207,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       print('DEBUG: Call Invitation Send Result: $result');
 
       // If invitation failed (likely user is offline), update alert status
-      if (!result) {
-        for (var entry in alertIds.entries) {
-          await UserService.updateCallAlertStatus(
-              entry.key, entry.value, 'offline');
-        }
+      if (!result && alertId != null) {
+        await UserService.updateCallAlertStatus(
+            targetUid, alertId, 'offline');
       }
 
       if (!result && mounted) {
@@ -1377,19 +1375,20 @@ class _ProfileCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                Positioned(
-                  right: 4,
-                  bottom: 4,
-                  child: Container(
-                    width: 16,
-                    height: 16,
-                    decoration: BoxDecoration(
-                      color: isBusy ? Colors.orangeAccent : const Color(0xFF00C9A7),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF1a1a2e), width: 2),
+                if (isBusy)
+                  Positioned(
+                    right: 4,
+                    bottom: 4,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFF1a1a2e), width: 2),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(width: 16),

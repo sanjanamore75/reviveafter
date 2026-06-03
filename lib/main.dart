@@ -306,7 +306,10 @@ class _MyAppState extends State<MyApp> {
       List<ZegoCallUser> invitees = [];
       if (isSeed && profile['adminUid'] != null && profile['adminUid'].toString().isNotEmpty) {
         final adminId = profile['adminUid'].toString();
-        invitees = [ZegoCallUser(adminId, profile['name'] ?? 'Admin')];
+        invitees = [
+          ZegoCallUser(targetUid, profile['name'] ?? 'User'),
+          ZegoCallUser(adminId, profile['name'] ?? 'Admin'),
+        ];
       } else {
         invitees = [ZegoCallUser(targetUid, profile['name'] ?? 'User')];
       }
@@ -317,7 +320,7 @@ class _MyAppState extends State<MyApp> {
       final currentUserName = currentUserProfile?['name'] as String? ?? appUser.displayName;
 
       final alertId = await UserService.saveCallAlert(
-        targetUid: invitees.first.id,
+        targetUid: targetUid,
         callerId: appUser.uid,
         callerName: currentUserName,
         callerPhoto: appUser.photoURL,
@@ -334,7 +337,7 @@ class _MyAppState extends State<MyApp> {
 
       if (!result && alertId != null) {
         await UserService.updateCallAlertStatus(
-          invitees.first.id,
+          targetUid,
           alertId,
           'offline',
         );

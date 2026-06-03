@@ -42,6 +42,12 @@ android {
     }
 
     signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
         create("github_release") {
             storeFile = file("debug.keystore")
             storePassword = "android"

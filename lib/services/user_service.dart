@@ -1,8 +1,44 @@
+import 'dart:async';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:chating/models/app_user.dart';
 
 class UserService {
   static final _db = FirebaseDatabase.instance;
+  static bool _hasRandomizedThisSession = false;
+
+  /// Randomizes seed profile statuses if less than 30% are busy.
+  /// Runs only once per app session (when the app starts).
+  static void randomizeStatusesIfAllOnline() {
+    if (_hasRandomizedThisSession) {
+      print('🔄 [UserService] Profiles already randomized this session. Skipping.');
+      return;
+    }
+    _hasRandomizedThisSession = true;
+    print('🔄 [UserService] Randomizing profile statuses at app start...');
+
+    seedProfilesStream().first.then((profiles) {
+      if (profiles.isNotEmpty) {
+        final total = profiles.length;
+        final busyCount = profiles.where((p) => p['status'] == 'busy').length;
+        final busyRatio = busyCount / total;
+        
+        if (busyRatio < 0.3) {
+          final targetBusy = (total * 0.3).ceil();
+          int needed = targetBusy - busyCount;
+          for (int i = 0; i < total && needed > 0; i++) {
+            if (profiles[i]['status'] != 'busy') {
+              final uid = profiles[i]['uid'];
+              if (uid != null) {
+                getUserRef(AppUser(uid: uid, displayName: '', email: ''))
+                    .update({'status': 'busy'});
+                needed--;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
 
   /// Returns the DatabaseReference for [user].
   static DatabaseReference getUserRef(AppUser user) =>
@@ -391,5 +427,126 @@ class UserService {
       if (data == null) return null;
       return Map<String, dynamic>.from(data);
     });
+  }
+
+  /// Real-time stream of all alerts (calls and messages) for all seed profiles belonging to [adminUid]
+  static Stream<List<Map<String, dynamic>>> adminAlertsStream(String adminUid) {
+    late StreamController<List<Map<String, dynamic>>> controller;
+    StreamSubscription? usersSub;
+    StreamSubscription? callsSub;
+    StreamSubscription? convsSub;
+
+    Set<String> seedUids = {};
+    Map<dynamic, dynamic> usersData = {};
+    Map<dynamic, dynamic> callsData = {};
+    Map<dynamic, dynamic> convsData = {};
+
+    void emitMerged() {
+      final List<Map<String, dynamic>> alertList = [];
+
+      // 1. Process call alerts
+      callsData.forEach((key, userCalls) {
+        final isSpecificSeed = seedUids.contains(key.toString());
+        final isAdminDirect = (key.toString() == adminUid);
+
+        if ((isSpecificSeed || isAdminDirect) && userCalls is Map) {
+          userCalls.forEach((alertId, alertData) {
+            if (alertData is Map) {
+              final alert = Map<String, dynamic>.from(alertData);
+              alert['type'] = 'call';
+              alert['seedUid'] = isSpecificSeed ? key.toString() : '';
+              // Find seed profile details
+              final seedProfile = isSpecificSeed
+                  ? usersData.values.firstWhere(
+                      (u) => u is Map && u['uid']?.toString() == key.toString(),
+                      orElse: () => null)
+                  : null;
+              alert['seedName'] = seedProfile?['name'] ?? 'Pushed Profile';
+              alert['seedPhoto'] = seedProfile?['photoURL'] ?? '';
+              alertList.add(alert);
+            }
+          });
+        }
+      });
+
+      // 2. Process conversations
+      convsData.forEach((seedUid, userConvs) {
+        if (seedUids.contains(seedUid.toString()) && userConvs is Map) {
+          userConvs.forEach((senderUid, convData) {
+            if (convData is Map) {
+              final conv = Map<String, dynamic>.from(convData);
+              conv['type'] = 'message';
+              conv['seedUid'] = seedUid.toString();
+              // Find seed profile details
+              final seedProfile = usersData.values.firstWhere(
+                  (u) => u is Map && u['uid']?.toString() == seedUid.toString(),
+                  orElse: () => null);
+              conv['seedName'] = seedProfile?['name'] ?? 'Pushed Profile';
+              conv['seedPhoto'] = seedProfile?['photoURL'] ?? '';
+
+              // Map fields to match call alert fields for sorting/display
+              conv['callerId'] = conv['uid']; // sender is the contact
+              conv['callerName'] = conv['name'] ?? 'User';
+              conv['callerPhoto'] = conv['photoURL'] ?? '';
+              conv['timestamp'] = conv['lastActivity'] ?? conv['lastMessageTime'] ?? 0;
+              conv['status'] = conv['lastMessage'] ?? '';
+
+              // Only add if there is actually a last message
+              if (conv['status'].toString().isNotEmpty) {
+                alertList.add(conv);
+              }
+            }
+          });
+        }
+      });
+
+      // Sort by timestamp descending (newest first)
+      alertList.sort((a, b) {
+        final tA = a['timestamp'] as int? ?? 0;
+        final tB = b['timestamp'] as int? ?? 0;
+        return tB.compareTo(tA);
+      });
+
+      if (!controller.isClosed) {
+        controller.add(alertList);
+      }
+    }
+
+    controller = StreamController<List<Map<String, dynamic>>>(
+      onListen: () {
+        usersSub = _db.ref('users')
+            .orderByChild('adminUid')
+            .equalTo(adminUid)
+            .onValue
+            .listen((event) {
+          usersData = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
+          seedUids = usersData.values
+              .map((e) => e is Map ? Map<String, dynamic>.from(e) : null)
+              .whereType<Map<String, dynamic>>()
+              .where((u) => u['isSeed'] == true || u['isSeed'] == 'true')
+              .map((u) => u['uid']?.toString())
+              .whereType<String>()
+              .toSet();
+          emitMerged();
+        });
+
+        callsSub = _db.ref('call_alerts').onValue.listen((event) {
+          callsData = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
+          emitMerged();
+        });
+
+        convsSub = _db.ref('conversations').onValue.listen((event) {
+          convsData = event.snapshot.value as Map<dynamic, dynamic>? ?? {};
+          emitMerged();
+        });
+      },
+      onCancel: () {
+        usersSub?.cancel();
+        callsSub?.cancel();
+        convsSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 }

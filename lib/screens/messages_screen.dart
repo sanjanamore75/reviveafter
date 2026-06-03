@@ -206,7 +206,7 @@ class _ConversationTile extends StatelessWidget {
                                   fontSize: 18))
                           : null,
                     ),
-                    if (!isCall)
+                    if (!isCall && profile?['status'] == 'busy')
                       Positioned(
                         right: 1,
                         bottom: 1,
@@ -214,9 +214,7 @@ class _ConversationTile extends StatelessWidget {
                           width: 12,
                           height: 12,
                           decoration: BoxDecoration(
-                            color: (profile?['status'] == 'busy')
-                                ? Colors.orangeAccent
-                                : const Color(0xFF00C9A7),
+                            color: Colors.orangeAccent,
                             shape: BoxShape.circle,
                             border: Border.all(
                                 color: const Color(0xFF1a1a2e), width: 2),

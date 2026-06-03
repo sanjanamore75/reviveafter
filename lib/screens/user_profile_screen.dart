@@ -240,19 +240,20 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           style: const TextStyle(color: Color(0xFF6C63FF)))
                       : null,
                 ),
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: isBusy ? Colors.orangeAccent : const Color(0xFF00C9A7),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF0F0C29), width: 1.5),
+                if (isBusy)
+                  Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFF0F0C29), width: 1.5),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
             const SizedBox(width: 16),
