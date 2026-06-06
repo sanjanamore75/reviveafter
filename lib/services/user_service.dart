@@ -88,12 +88,26 @@ class UserService {
     await _db.ref('users/$uid').update({'fcmToken': token});
   }
 
+  /// Returns a gender-based default avatar URL.
+  static String getDefaultAvatar(String? gender) {
+    if (gender == 'female') {
+      return 'https://avatar.iran.liara.run/public/girl';
+    } else {
+      return 'https://avatar.iran.liara.run/public/boy';
+    }
+  }
+
   /// Returns a stream of the current user's profile data.
   static Stream<Map<String, dynamic>?> userStream(AppUser user) {
     return getUserRef(user).onValue.map((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data == null) return null;
-      return Map<String, dynamic>.from(data);
+      final userMap = Map<String, dynamic>.from(data);
+      final photo = userMap['photoURL']?.toString();
+      if (photo == null || photo.isEmpty) {
+        userMap['photoURL'] = getDefaultAvatar(userMap['gender'] as String?);
+      }
+      return userMap;
     });
   }
 
@@ -116,7 +130,12 @@ class UserService {
       if (!snap.exists || snap.value == null) return null;
 
       if (snap.value is Map) {
-        return Map<String, dynamic>.from(snap.value as Map);
+        final userMap = Map<String, dynamic>.from(snap.value as Map);
+        final photo = userMap['photoURL']?.toString();
+        if (photo == null || photo.isEmpty) {
+          userMap['photoURL'] = getDefaultAvatar(userMap['gender'] as String?);
+        }
+        return userMap;
       }
       return null;
     } catch (e) {
@@ -157,17 +176,18 @@ class UserService {
           return false;
         }
 
-        // 3. Must have a photo
-        if (user['photoURL'] == null || user['photoURL'].toString().isEmpty) {
-          return false;
-        }
-
         // 4. Match gender preference
         final gender = user['gender'] as String?;
         if (lookingFor == 'both') {
           return gender == 'male' || gender == 'female';
         }
         return gender == lookingFor;
+      }).map((userMap) {
+        final photo = userMap['photoURL']?.toString();
+        if (photo == null || photo.isEmpty) {
+          userMap['photoURL'] = getDefaultAvatar(userMap['gender'] as String?);
+        }
+        return userMap;
       }).toList();
 
       list.shuffle();
@@ -207,6 +227,13 @@ class UserService {
       return data.values
           .map((e) => Map<String, dynamic>.from(e as Map))
           .where((user) => user['isSeed'] != true && user['uid'] != null)
+          .map((userMap) {
+        final photo = userMap['photoURL']?.toString();
+        if (photo == null || photo.isEmpty) {
+          userMap['photoURL'] = getDefaultAvatar(userMap['gender'] as String?);
+        }
+        return userMap;
+      })
           .toList();
     });
   }
@@ -253,6 +280,12 @@ class UserService {
       if (data == null) return [];
       final list =
           data.values.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      for (var userMap in list) {
+        final photo = userMap['photoURL']?.toString();
+        if (photo == null || photo.isEmpty) {
+          userMap['photoURL'] = getDefaultAvatar(userMap['gender'] as String?);
+        }
+      }
       list.sort((a, b) {
         final aTime = a['createdAt'] as int? ?? 0;
         final bTime = b['createdAt'] as int? ?? 0;
@@ -425,7 +458,12 @@ class UserService {
     return _db.ref('users/$uid').onValue.map((event) {
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
       if (data == null) return null;
-      return Map<String, dynamic>.from(data);
+      final userMap = Map<String, dynamic>.from(data);
+      final photo = userMap['photoURL']?.toString();
+      if (photo == null || photo.isEmpty) {
+        userMap['photoURL'] = getDefaultAvatar(userMap['gender'] as String?);
+      }
+      return userMap;
     });
   }
 

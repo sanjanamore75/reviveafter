@@ -251,7 +251,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   const SizedBox(height: 12),
                   const Center(
                     child: Text(
-                      'If you upload an image then only your profile\nwill be visible to others.',
+                      "If you don't upload a custom image, a default\navatar based on your gender will be used.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           color: Color(0xFFFFB74D),
